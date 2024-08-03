@@ -1,0 +1,77 @@
+# This workflow will scrap GitHub trending projects daily.
+name: Open-Port-Distributed Task(multi-port2)
+
+on:
+#  push:
+#    branches:
+#      - master
+#    tags: [ "v[0-9]+.[0-9]+.[0-9]+*" ]
+
+  workflow_run:
+    workflows: ["parallel-task-clean-pre"]  # 这里需要匹配第一个 workflow 的名称
+    types:
+      - completed
+#  schedule:
+    # run on every hour
+    # - cron: "0 * * * *"
+    # run on every 3 hour
+    # - cron: "0 */3 * * *"
+    # run on every 15 min
+    # - cron: "*/45 * * * *"
+    # run on 0 and 12 clock
+#    - cron: "0 */1 * * *"
+env:
+  REDIS_HOST: ${{ secrets.REDIS_HOST }}
+  REDIS_PORT: ${{ secrets.REDIS_PORT }}
+  REDIS_PASS: ${{ secrets.REDIS_PASS }}
+
+jobs:
+  build:
+
+    runs-on: ubuntu-latest
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v2
+
+    - name: Set up Python 3.11
+      uses: actions/setup-python@v2
+      with:
+        python-version: 3.11
+
+    - name: Set up Masscan
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y masscan
+        sudo apt-get install python3-matplotlib
+
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        sudo pip install -r requirements.txt
+        sudo pip install redis
+
+    - name: Run Run Open port ranks
+      run: |
+        sudo -E python3 main.py
+        curl ipinfo.io
+        
+
+    - name: Check for changes
+      id: git-status0
+      run: |
+        git diff --exit-code || echo "::set-output name=changed::true"
+      continue-on-error: true
+
+    # Runs a set of commands using the runners shell
+    - name: Push to origin master
+      if: steps.git-status0.outputs.changed == 'true'
+      run: |
+        echo start push
+        git config --global user.name "fireinrain"
+        git config --global user.email "lzyme.dev@gmail.com"
+        git add asn/ ports_results/ README.md
+        git commit -m $(date '+%Y-%m-%d')
+        git push origin HEAD:master
+
